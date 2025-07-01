@@ -2,22 +2,38 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-
-QT_BEGIN_NAMESPACE
-namespace Ui {
-class MainWindow;
-}
-QT_END_NAMESPACE
+#include <QTableWidget>
+#include <QLineEdit>
+#include <QPushButton>
+#include "database.h"
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr);
+    explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+private slots:
+    void addTransaction();
+    void deleteTransaction();
+    void updateBalance();
+    void loadTransactions();
+
 private:
-    Ui::MainWindow *ui;
+    void setupUI();
+    void setupConnections();
+
+    // Виджеты
+    QTableWidget *transactionsTable;
+    QLineEdit *balanceEdit;
+    QPushButton *addButton;
+    QPushButton *deleteButton;
+    QPushButton *filterButton;
+    QPushButton *statsButton;
+
+    DataBase *m_db;
 };
+
 #endif // MAINWINDOW_H
