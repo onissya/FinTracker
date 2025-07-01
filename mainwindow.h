@@ -5,6 +5,9 @@
 #include <QTableWidget>
 #include <QLineEdit>
 #include <QPushButton>
+#include <qspinbox.h>
+#include <QComboBox>
+
 #include "database.h"
 
 class MainWindow : public QMainWindow
@@ -20,6 +23,8 @@ private slots:
     void deleteTransaction();
     void updateBalance();
     void loadTransactions();
+    void sortTable();
+    void statsTable();
 
 private:
     void setupUI();
@@ -30,8 +35,8 @@ private:
     QLineEdit *balanceEdit;
     QPushButton *addButton;
     QPushButton *deleteButton;
-    QPushButton *filterButton;
     QPushButton *statsButton;
+    QComboBox *sortComboBox;
 
     DataBase *m_db;
 };

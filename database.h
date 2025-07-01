@@ -3,6 +3,9 @@
 
 #include <QObject>
 #include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QDebug>
 
 class DataBase : public QObject
 {

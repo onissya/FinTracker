@@ -15,6 +15,7 @@ qt_add_executable(FinTracker
     database.h
     README.txt
     .gitignore
+        database.h
 )
 
 target_link_libraries(FinTracker

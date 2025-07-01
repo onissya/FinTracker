@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "mainwindow.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -9,6 +10,7 @@
 #include <QDoubleSpinBox>
 #include <QDateEdit>
 #include <QSqlQuery>
+#include <QTextBlock>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -43,12 +45,16 @@ void MainWindow::setupUI()
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     addButton = new QPushButton("Add", this);
     deleteButton = new QPushButton("Delete", this);
-    filterButton = new QPushButton("Sort", this);
+    sortComboBox = new QComboBox(this);
+    sortComboBox->addItem("Позже",0);
+    sortComboBox->addItem("Раньше",1);
+    sortComboBox->addItem("По убыванию цен",2);
+    sortComboBox->addItem("По возрастанию цен",3);
     statsButton = new QPushButton("Statistic", this);
 
     buttonLayout->addWidget(addButton);
     buttonLayout->addWidget(deleteButton);
-    buttonLayout->addWidget(filterButton);
+    buttonLayout->addWidget(sortComboBox);
     buttonLayout->addWidget(statsButton);
 
     // Поле баланса
@@ -71,6 +77,8 @@ void MainWindow::setupConnections()
 {
     connect(addButton, &QPushButton::clicked, this, &MainWindow::addTransaction);
     connect(deleteButton, &QPushButton::clicked, this, &MainWindow::deleteTransaction);
+    connect(sortComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::sortTable);
+    connect(statsButton, &QPushButton::clicked, this, &MainWindow::statsTable);
 }
 
 void MainWindow::addTransaction()
@@ -165,6 +173,23 @@ void MainWindow::deleteTransaction()
     }
 }
 
+void MainWindow::sortTable() {
+    int sorting=sortComboBox->currentIndex();
+    transactionsTable->setSortingEnabled(true);
+    if(sorting==0) {
+        transactionsTable->sortByColumn(3,Qt::AscendingOrder);
+    }
+    if(sorting==1) {
+        transactionsTable->sortByColumn(3,Qt::DescendingOrder);
+    }
+    if(sorting==2) {
+        transactionsTable->sortByColumn(2,Qt::DescendingOrder);
+    }
+    if(sorting==3) {
+        transactionsTable->sortByColumn(2,Qt::AscendingOrder);
+    }
+}
+
 void MainWindow::updateBalance()
 {
     QSqlQuery query("SELECT SUM(CASE WHEN type='income' THEN amount ELSE -amount END) FROM transactions");
@@ -179,4 +204,15 @@ void MainWindow::updateBalance()
     QPalette palette = balanceEdit->palette();
     palette.setColor(QPalette::Text, balance < 0 ? Qt::red : Qt::black);
     balanceEdit->setPalette(palette);
+}
+
+
+
+void MainWindow::statsTable() {
+    QMessageBox statsTable;
+    statsTable.setText("Тратьте меньше денег");
+    statsTable.setIcon(QMessageBox::NoIcon);
+    statsTable.setStandardButtons(QMessageBox::Close);
+    statsTable.setDefaultButton(QMessageBox::Close);
+    statsTable.exec();
 }
