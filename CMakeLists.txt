@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.19)
 project(FinTracker LANGUAGES CXX)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Sql)
+
 
 qt_standard_project_setup()
 
@@ -12,12 +14,14 @@ qt_add_executable(FinTracker
     mainwindow.h
     mainwindow.ui
     .gitignore
+    database.h database.cpp
 )
 
 target_link_libraries(FinTracker
     PRIVATE
         Qt::Core
         Qt::Widgets
+        Qt::Sql
 )
 
 include(GNUInstallDirs)
