@@ -56,6 +56,8 @@ void MainWindow::setupUI()
     sortComboBox->addItem("Oldest first", 1);
     sortComboBox->addItem("Price high to low", 2);
     sortComboBox->addItem("Price low to high", 3);
+    sortComboBox->addItem("Expense", 4);
+    sortComboBox->addItem("Income", 5);
 
     buttonLayout->addWidget(addButton);
     buttonLayout->addWidget(deleteButton);
@@ -265,6 +267,8 @@ void MainWindow::sortTable(int index)
     case 1: orderBy = "date"; order = Qt::AscendingOrder; break;  // Oldest first
     case 2: orderBy = "amount"; order = Qt::DescendingOrder; break; // High to low
     case 3: orderBy = "amount"; order = Qt::AscendingOrder; break;  // Low to high
+    case 4: orderBy = "type"; order = Qt::AscendingOrder; break;
+    case 5: orderBy = "type"; order = Qt::DescendingOrder; break;
     default: return;
     }
 
