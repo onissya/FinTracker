@@ -1,5 +1,4 @@
 #include "mainwindow.h"
-#include "mainwindow.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -10,7 +9,6 @@
 #include <QDoubleSpinBox>
 #include <QDateEdit>
 #include <QSqlQuery>
-#include <QTextBlock>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -20,7 +18,7 @@ MainWindow::MainWindow(QWidget *parent)
     setupConnections();
 
     if (m_db->isInitialized()) {
-        loadTransactions(); // Загружаем существующие транзакции
+        loadTransactions();
         updateBalance();
     } else {
         QMessageBox::critical(this, "Ошибка", "Не удалось подключиться к базе данных");
@@ -37,23 +35,31 @@ void MainWindow::setupUI()
 
     // Таблица транзакций
     transactionsTable = new QTableWidget(this);
-    transactionsTable->setColumnCount(4);
-    transactionsTable->setHorizontalHeaderLabels({"Name", "Type", "Price", "Date"});
-    transactionsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    transactionsTable->setColumnCount(5);
+    transactionsTable->setHorizontalHeaderLabels({"", "Name", "Type", "Price", "Date"});
+    transactionsTable->setColumnWidth(0, 30);
+    transactionsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
+    transactionsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    transactionsTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    transactionsTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    transactionsTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
 
     // Панель кнопок
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     addButton = new QPushButton("Add", this);
     deleteButton = new QPushButton("Delete", this);
+    selectAllButton = new QPushButton("Select All", this);
     sortComboBox = new QComboBox(this);
-    sortComboBox->addItem("Позже",0);
-    sortComboBox->addItem("Раньше",1);
-    sortComboBox->addItem("По убыванию цен",2);
-    sortComboBox->addItem("По возрастанию цен",3);
     statsButton = new QPushButton("Statistic", this);
+
+    sortComboBox->addItem("Newest first", 0);
+    sortComboBox->addItem("Oldest first", 1);
+    sortComboBox->addItem("Price high to low", 2);
+    sortComboBox->addItem("Price low to high", 3);
 
     buttonLayout->addWidget(addButton);
     buttonLayout->addWidget(deleteButton);
+    buttonLayout->addWidget(selectAllButton);
     buttonLayout->addWidget(sortComboBox);
     buttonLayout->addWidget(statsButton);
 
@@ -62,7 +68,7 @@ void MainWindow::setupUI()
     balanceEdit->setReadOnly(true);
     balanceEdit->setAlignment(Qt::AlignRight);
     balanceEdit->setStyleSheet("font: 14pt; background: #f8f8f8; border: 1px solid #ccc;");
-    balanceEdit->setText("Баланс: 0.00 $");
+    balanceEdit->setText("Balance: 0.00 $");
 
     // Компоновка
     mainLayout->addWidget(transactionsTable);
@@ -71,148 +77,260 @@ void MainWindow::setupUI()
 
     setCentralWidget(centralWidget);
     resize(800, 600);
+
+    // Стилизация
+    transactionsTable->setStyleSheet(
+        "QTableWidget {"
+        "   selection-background-color: #E6F3FA;"
+        "   selection-color: black;"
+        "}"
+        "QTableWidget::indicator {"
+        "   width: 16px;"
+        "   height: 16px;"
+        "}"
+        "QTableWidget::indicator:checked {"
+        "   background-color: #4CAF50;"
+        "}");
 }
 
 void MainWindow::setupConnections()
 {
     connect(addButton, &QPushButton::clicked, this, &MainWindow::addTransaction);
     connect(deleteButton, &QPushButton::clicked, this, &MainWindow::deleteTransaction);
-    connect(sortComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::sortTable);
+    connect(selectAllButton, &QPushButton::clicked, this, &MainWindow::selectAllTransactions);
+    connect(sortComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::sortTable);
     connect(statsButton, &QPushButton::clicked, this, &MainWindow::statsTable);
+}
+
+void MainWindow::loadTransactions()
+{
+    transactionsTable->setRowCount(0);
+    QSqlQuery query("SELECT id, date, amount, category, type FROM transactions ORDER BY date DESC");
+
+    while (query.next()) {
+        int row = transactionsTable->rowCount();
+        transactionsTable->insertRow(row);
+
+        // Checkbox column
+        QTableWidgetItem *checkItem = new QTableWidgetItem();
+        checkItem->setCheckState(Qt::Unchecked);
+        checkItem->setFlags(Qt::ItemIsUserCheckable | Qt::ItemIsEnabled);
+        transactionsTable->setItem(row, 0, checkItem);
+        checkItem->setData(Qt::UserRole, query.value("id"));
+
+        // Name column
+        transactionsTable->setItem(row, 1, new QTableWidgetItem(query.value("category").toString()));
+
+        // Type column
+        QString type = query.value("type").toString() == "income" ? "Income" : "Expense";
+        transactionsTable->setItem(row, 2, new QTableWidgetItem(type));
+
+        // Price column
+        transactionsTable->setItem(row, 3, new QTableWidgetItem(QString::number(query.value("amount").toDouble(), 'f', 2)));
+
+        // Date column
+        QDate date = QDate::fromString(query.value("date").toString(), "yyyy-MM-dd");
+        transactionsTable->setItem(row, 4, new QTableWidgetItem(date.toString("dd.MM.yyyy")));
+    }
 }
 
 void MainWindow::addTransaction()
 {
-    // 1. Создаем диалог для ввода данных
     QDialog dialog(this);
     QFormLayout form(&dialog);
 
     QLineEdit nameEdit;
     QComboBox typeCombo;
-    typeCombo.addItems({"Доход", "Расход"});
+    typeCombo.addItems({"Income", "Expense"});
+
     QDoubleSpinBox amountEdit;
-    amountEdit.setRange(-1e12, 1e12);  // Диапазон от -1 триллиона до +1 триллиона
-    amountEdit.setDecimals(2);         // 2 знака после запятой
-    amountEdit.setPrefix("$ ");        // Добавляем символ валюты
+    amountEdit.setRange(-1e12, 1e12);
+    amountEdit.setDecimals(2);
+    amountEdit.setPrefix("$ ");
+
     QDateEdit dateEdit(QDate::currentDate());
 
-    form.addRow("Наименование:", &nameEdit);
-    form.addRow("Тип:", &typeCombo);
-    form.addRow("Сумма:", &amountEdit);
-    form.addRow("Дата:", &dateEdit);
+    form.addRow("Name:", &nameEdit);
+    form.addRow("Type:", &typeCombo);
+    form.addRow("Amount:", &amountEdit);
+    form.addRow("Date:", &dateEdit);
 
-    QDialogButtonBox buttonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
-                               Qt::Horizontal, &dialog);
+    QDialogButtonBox buttonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, &dialog);
     form.addRow(&buttonBox);
 
     connect(&buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(&buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 
-    // 2. Если пользователь ввел данные
     if (dialog.exec() == QDialog::Accepted) {
-        // 3. Добавляем в БД
         QSqlQuery query;
         query.prepare("INSERT INTO transactions (date, amount, category, type) "
                       "VALUES (:date, :amount, :category, :type)");
         query.bindValue(":date", dateEdit.date().toString("yyyy-MM-dd"));
         query.bindValue(":amount", amountEdit.value());
         query.bindValue(":category", nameEdit.text());
-        query.bindValue(":type", typeCombo.currentText() == "Доход" ? "income" : "expense");
+        query.bindValue(":type", typeCombo.currentText().toLower());
 
         if (query.exec()) {
-            // 4. Обновляем интерфейс
             loadTransactions();
             updateBalance();
         } else {
-            QMessageBox::warning(this, "Ошибка", "Не удалось добавить транзакцию");
+            QMessageBox::warning(this, "Error", "Failed to add transaction");
         }
-    }
-}
-
-void MainWindow::loadTransactions()
-{
-    transactionsTable->setRowCount(0); // Очищаем таблицу
-
-    QSqlQuery query("SELECT date, amount, category, type FROM transactions ORDER BY date DESC");
-
-    while (query.next()) {
-        int row = transactionsTable->rowCount();
-        transactionsTable->insertRow(row);
-
-        // Преобразуем тип для отображения
-        QString typeDisplay = query.value("type").toString() == "income"
-                                  ? "Доход" : "Расход";
-
-        // Заполняем строку
-        transactionsTable->setItem(row, 0, new QTableWidgetItem(query.value("category").toString()));
-        transactionsTable->setItem(row, 1, new QTableWidgetItem(typeDisplay));
-        transactionsTable->setItem(row, 2, new QTableWidgetItem(QString::number(query.value("amount").toDouble(), 'f', 2)));
-        transactionsTable->setItem(row, 3, new QTableWidgetItem(QDate::fromString(query.value("date").toString(), "yyyy-MM-dd").toString("dd.MM.yyyy")));
     }
 }
 
 void MainWindow::deleteTransaction()
 {
-    QModelIndexList selected = transactionsTable->selectionModel()->selectedRows();
-    if (selected.isEmpty()) return;
+    QVector<int> idsToDelete;
 
-    int row = selected.first().row();
-    QString date = transactionsTable->item(row, 3)->text();
-    QString amount = transactionsTable->item(row, 2)->text();
+    // Collect checked transaction IDs
+    for (int row = 0; row < transactionsTable->rowCount(); ++row) {
+        QTableWidgetItem *item = transactionsTable->item(row, 0);
+        if (item && item->checkState() == Qt::Checked) {
+            idsToDelete.append(item->data(Qt::UserRole).toInt());
+        }
+    }
 
-    QSqlQuery query;
-    query.prepare("DELETE FROM transactions WHERE date = :date AND amount = :amount");
-    query.bindValue(":date", QDate::fromString(date, "dd.MM.yyyy").toString("yyyy-MM-dd"));
-    query.bindValue(":amount", amount.toDouble());
+    if (idsToDelete.isEmpty()) {
+        QMessageBox::warning(this, "Error", "No transactions selected");
+        return;
+    }
 
-    if (query.exec()) {
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this,
+        "Confirm",
+        QString("Delete %1 selected transactions?").arg(idsToDelete.size()),
+        QMessageBox::Yes | QMessageBox::No
+        );
+
+    if (reply != QMessageBox::Yes) return;
+
+    // Delete in transaction
+    QSqlDatabase::database().transaction();
+    bool success = true;
+
+    for (int id : idsToDelete) {
+        QSqlQuery query;
+        query.prepare("DELETE FROM transactions WHERE id = ?");
+        query.addBindValue(id);
+
+        if (!query.exec()) {
+            success = false;
+            qCritical() << "Delete error:" << query.lastError().text();
+            break;
+        }
+    }
+
+    if (success) {
+        QSqlDatabase::database().commit();
         loadTransactions();
         updateBalance();
+        QMessageBox::information(this, "Success", "Transactions deleted");
     } else {
-        QMessageBox::warning(this, "Ошибка", "Не удалось удалить транзакцию");
+        QSqlDatabase::database().rollback();
+        QMessageBox::critical(this, "Error", "Failed to delete transactions");
     }
 }
 
-void MainWindow::sortTable() {
-    int sorting=sortComboBox->currentIndex();
-    transactionsTable->setSortingEnabled(true);
-    if(sorting==0) {
-        transactionsTable->sortByColumn(3,Qt::AscendingOrder);
+void MainWindow::selectAllTransactions()
+{
+    bool allChecked = true;
+
+    // Check if all are already checked
+    for (int row = 0; row < transactionsTable->rowCount(); ++row) {
+        if (QTableWidgetItem *item = transactionsTable->item(row, 0)) {
+            if (item->checkState() != Qt::Checked) {
+                allChecked = false;
+                break;
+            }
+        }
     }
-    if(sorting==1) {
-        transactionsTable->sortByColumn(3,Qt::DescendingOrder);
+
+    // Toggle check state
+    Qt::CheckState newState = allChecked ? Qt::Unchecked : Qt::Checked;
+    for (int row = 0; row < transactionsTable->rowCount(); ++row) {
+        if (QTableWidgetItem *item = transactionsTable->item(row, 0)) {
+            item->setCheckState(newState);
+        }
     }
-    if(sorting==2) {
-        transactionsTable->sortByColumn(2,Qt::DescendingOrder);
+}
+
+void MainWindow::sortTable(int index)
+{
+    QString orderBy;
+    Qt::SortOrder order;
+
+    switch (index) {
+    case 0: orderBy = "date"; order = Qt::DescendingOrder; break; // Newest first
+    case 1: orderBy = "date"; order = Qt::AscendingOrder; break;  // Oldest first
+    case 2: orderBy = "amount"; order = Qt::DescendingOrder; break; // High to low
+    case 3: orderBy = "amount"; order = Qt::AscendingOrder; break;  // Low to high
+    default: return;
     }
-    if(sorting==3) {
-        transactionsTable->sortByColumn(2,Qt::AscendingOrder);
+
+    QSqlQuery query;
+    query.prepare(QString("SELECT id, date, amount, category, type FROM transactions ORDER BY %1 %2")
+                      .arg(orderBy)
+                      .arg(order == Qt::DescendingOrder ? "DESC" : "ASC"));
+
+    if (query.exec()) {
+        transactionsTable->setRowCount(0);
+        while (query.next()) {
+            int row = transactionsTable->rowCount();
+            transactionsTable->insertRow(row);
+
+            // Checkbox column
+            QTableWidgetItem *checkItem = new QTableWidgetItem();
+            checkItem->setCheckState(Qt::Unchecked);
+            checkItem->setFlags(Qt::ItemIsUserCheckable | Qt::ItemIsEnabled);
+            transactionsTable->setItem(row, 0, checkItem);
+            checkItem->setData(Qt::UserRole, query.value("id"));
+
+            // Other columns
+            transactionsTable->setItem(row, 1, new QTableWidgetItem(query.value("category").toString()));
+
+            QString type = query.value("type").toString() == "income" ? "Income" : "Expense";
+            transactionsTable->setItem(row, 2, new QTableWidgetItem(type));
+
+            transactionsTable->setItem(row, 3, new QTableWidgetItem(QString::number(query.value("amount").toDouble(), 'f', 2)));
+
+            QDate date = QDate::fromString(query.value("date").toString(), "yyyy-MM-dd");
+            transactionsTable->setItem(row, 4, new QTableWidgetItem(date.toString("dd.MM.yyyy")));
+        }
     }
 }
 
 void MainWindow::updateBalance()
 {
     QSqlQuery query("SELECT SUM(CASE WHEN type='income' THEN amount ELSE -amount END) FROM transactions");
-    double balance = 0.0;
+    double balance = query.next() ? query.value(0).toDouble() : 0.0;
 
-    if (query.next()) {
-        balance = query.value(0).toDouble();
-    }
-
-    balanceEdit->setText(QString("Баланс: %1 $").arg(balance, 0, 'f', 2));
+    balanceEdit->setText(QString("Balance: %1 $").arg(balance, 0, 'f', 2));
 
     QPalette palette = balanceEdit->palette();
     palette.setColor(QPalette::Text, balance < 0 ? Qt::red : Qt::black);
     balanceEdit->setPalette(palette);
 }
 
+void MainWindow::statsTable()
+{
+    QSqlQuery incomeQuery("SELECT SUM(amount) FROM transactions WHERE type='income'");
+    QSqlQuery expenseQuery("SELECT SUM(amount) FROM transactions WHERE type='expense'");
 
+    double income = incomeQuery.next() ? incomeQuery.value(0).toDouble() : 0.0;
+    double expense = expenseQuery.next() ? expenseQuery.value(0).toDouble() : 0.0;
+    double balance = income - expense;
 
-void MainWindow::statsTable() {
-    QMessageBox statsTable;
-    statsTable.setText("Тратьте меньше денег");
-    statsTable.setIcon(QMessageBox::NoIcon);
-    statsTable.setStandardButtons(QMessageBox::Close);
-    statsTable.setDefaultButton(QMessageBox::Close);
-    statsTable.exec();
+    QString stats = QString(
+                        "Financial Statistics:\n\n"
+                        "Total Income: %1 $\n"
+                        "Total Expense: %2 $\n"
+                        "Current Balance: %3 $\n\n"
+                        "Recommendation: %4"
+                        ).arg(income, 0, 'f', 2)
+                        .arg(expense, 0, 'f', 2)
+                        .arg(balance, 0, 'f', 2)
+                        .arg(balance < 0 ? "Reduce your expenses!" : "Good financial health!");
+
+    QMessageBox::information(this, "Statistics", stats);
 }

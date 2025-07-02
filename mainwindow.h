@@ -3,11 +3,9 @@
 
 #include <QMainWindow>
 #include <QTableWidget>
-#include <QLineEdit>
 #include <QPushButton>
-#include <qspinbox.h>
+#include <QLineEdit>
 #include <QComboBox>
-
 #include "database.h"
 
 class MainWindow : public QMainWindow
@@ -21,24 +19,25 @@ public:
 private slots:
     void addTransaction();
     void deleteTransaction();
+    void selectAllTransactions();
+    void sortTable(int index);
     void updateBalance();
-    void loadTransactions();
-    void sortTable();
     void statsTable();
 
 private:
     void setupUI();
     void setupConnections();
-
-    // Виджеты
-    QTableWidget *transactionsTable;
-    QLineEdit *balanceEdit;
-    QPushButton *addButton;
-    QPushButton *deleteButton;
-    QPushButton *statsButton;
-    QComboBox *sortComboBox;
+    void loadTransactions();
 
     DataBase *m_db;
+
+    QTableWidget *transactionsTable;
+    QPushButton *addButton;
+    QPushButton *deleteButton;
+    QPushButton *selectAllButton;
+    QPushButton *statsButton;
+    QComboBox *sortComboBox;
+    QLineEdit *balanceEdit;
 };
 
 #endif // MAINWINDOW_H
