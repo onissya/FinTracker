@@ -50,6 +50,9 @@ void MainWindow::setupUI()
     sortComboBox->addItem("Раньше",1);
     sortComboBox->addItem("По убыванию цен",2);
     sortComboBox->addItem("По возрастанию цен",3);
+    sortComboBox->addItem("Сначала доход",4);
+    sortComboBox->addItem("Сначала расход",5);
+
     statsButton = new QPushButton("Statistic", this);
 
     buttonLayout->addWidget(addButton);
@@ -143,9 +146,9 @@ void MainWindow::loadTransactions()
         QString typeDisplay = query.value("type").toString() == "income"
                                   ? "Доход" : "Расход";
 
-        // Заполняем строку
+        // Используем кастомные элементы для столбца "Type"
         transactionsTable->setItem(row, 0, new QTableWidgetItem(query.value("category").toString()));
-        transactionsTable->setItem(row, 1, new QTableWidgetItem(typeDisplay));
+        transactionsTable->setItem(row, 1, new TypeTableItem(typeDisplay)); // <-- Здесь изменение!
         transactionsTable->setItem(row, 2, new QTableWidgetItem(QString::number(query.value("amount").toDouble(), 'f', 2)));
         transactionsTable->setItem(row, 3, new QTableWidgetItem(QDate::fromString(query.value("date").toString(), "yyyy-MM-dd").toString("dd.MM.yyyy")));
     }
@@ -174,19 +177,28 @@ void MainWindow::deleteTransaction()
 }
 
 void MainWindow::sortTable() {
-    int sorting=sortComboBox->currentIndex();
+    int sorting = sortComboBox->currentIndex();
     transactionsTable->setSortingEnabled(true);
-    if(sorting==0) {
-        transactionsTable->sortByColumn(3,Qt::AscendingOrder);
-    }
-    if(sorting==1) {
-        transactionsTable->sortByColumn(3,Qt::DescendingOrder);
-    }
-    if(sorting==2) {
-        transactionsTable->sortByColumn(2,Qt::DescendingOrder);
-    }
-    if(sorting==3) {
-        transactionsTable->sortByColumn(2,Qt::AscendingOrder);
+
+    switch(sorting) {
+        case 0: // Позже
+            transactionsTable->sortByColumn(3, Qt::AscendingOrder);
+        break;
+        case 1: // Раньше
+            transactionsTable->sortByColumn(3, Qt::DescendingOrder);
+        break;
+        case 2: // По убыванию цен
+            transactionsTable->sortByColumn(2, Qt::DescendingOrder);
+        break;
+        case 3: // По возрастанию цен
+            transactionsTable->sortByColumn(2, Qt::AscendingOrder);
+        break;
+        case 4: // Сначала доход
+            transactionsTable->sortByColumn(1, Qt::AscendingOrder); // Используем кастомную сортировку
+        break;
+        case 5: // Сначала расход
+            transactionsTable->sortByColumn(1, Qt::DescendingOrder); // Используем кастомную сортировку
+        break;
     }
 }
 

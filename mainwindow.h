@@ -10,6 +10,27 @@
 
 #include "database.h"
 
+
+#include <QTableWidgetItem>
+
+// Добавьте этот класс в mainwindow.h
+class TypeTableItem : public QTableWidgetItem {
+public:
+    TypeTableItem(const QString& text) : QTableWidgetItem(text) {}
+
+    bool operator<(const QTableWidgetItem& other) const override {
+        // Специальная логика сортировки для столбца "Type"
+        QString thisText = text();
+        QString otherText = other.text();
+
+        // Порядок сортировки: Доход -> Расход -> другие значения
+        if (thisText == "Доход" && otherText != "Доход") return true;
+        if (thisText == "Расход" && otherText == "Доход") return false;
+
+        return QTableWidgetItem::operator<(other);
+    }
+};
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
