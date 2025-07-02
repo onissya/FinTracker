@@ -8,6 +8,21 @@
 #include <QComboBox>
 #include "database.h"
 
+#include <QtCharts>
+#include <QDialog>
+
+
+
+class BalanceChartDialog : public QDialog {
+    Q_OBJECT
+public:
+    explicit BalanceChartDialog(QWidget* parent = nullptr);
+    void setBalanceData(const QMap<QDate, double>& data);
+
+private:
+    QChartView* chartView;
+};
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -28,6 +43,8 @@ private:
     void setupUI();
     void setupConnections();
     void loadTransactions();
+    QMap<QDate, double> calculateDailyBalances();
+    void showBalanceChart();
 
     DataBase *m_db;
 

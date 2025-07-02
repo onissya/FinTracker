@@ -9,6 +9,10 @@
 #include <QDoubleSpinBox>
 #include <QDateEdit>
 #include <QSqlQuery>
+#include <QMap>
+#include <QDate>
+#include <QSqlQuery>
+#include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -101,7 +105,7 @@ void MainWindow::setupConnections()
     connect(deleteButton, &QPushButton::clicked, this, &MainWindow::deleteTransaction);
     connect(selectAllButton, &QPushButton::clicked, this, &MainWindow::selectAllTransactions);
     connect(sortComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::sortTable);
-    connect(statsButton, &QPushButton::clicked, this, &MainWindow::statsTable);
+    connect(statsButton, &QPushButton::clicked, this, &MainWindow::showBalanceChart);
 }
 
 void MainWindow::loadTransactions()
@@ -338,3 +342,98 @@ void MainWindow::statsTable()
 
     QMessageBox::information(this, "Statistics", stats);
 }
+
+
+BalanceChartDialog::BalanceChartDialog(QWidget* parent)
+    : QDialog(parent)
+{
+    setWindowTitle("История баланса");
+    resize(800, 500);
+
+    chartView = new QChartView(this);
+    chartView->setRenderHint(QPainter::Antialiasing);
+
+    QVBoxLayout* layout = new QVBoxLayout(this);
+    layout->addWidget(chartView);
+    setLayout(layout);
+}
+
+void BalanceChartDialog::setBalanceData(const QMap<QDate, double>& data)
+{
+    QLineSeries* series = new QLineSeries();
+    series->setName("Баланс");
+
+    // Преобразуем данные в точки графика
+    for (auto it = data.constBegin(); it != data.constEnd(); ++it) {
+        series->append(it.key().startOfDay().toMSecsSinceEpoch(), it.value());
+    }
+
+    QChart* chart = new QChart();
+    chart->addSeries(series);
+    chart->setTitle("Изменение баланса");
+    chart->legend()->setVisible(true);
+    chart->legend()->setAlignment(Qt::AlignBottom);
+
+    // Ось X (даты)
+    QDateTimeAxis* axisX = new QDateTimeAxis;
+    axisX->setTitleText("Дата");
+    axisX->setFormat("dd.MM.yyyy");
+    axisX->setTickCount(7);
+    chart->addAxis(axisX, Qt::AlignBottom);
+    series->attachAxis(axisX);
+
+    // Ось Y (значения)
+    QValueAxis* axisY = new QValueAxis;
+    axisY->setTitleText("Баланс ($)");
+    axisY->setLabelFormat("%.2f");
+    chart->addAxis(axisY, Qt::AlignLeft);
+    series->attachAxis(axisY);
+
+    chartView->setChart(chart);
+}
+
+
+// Рассчитывает баланс по дням
+QMap<QDate, double> MainWindow::calculateDailyBalances()
+{
+    QMap<QDate, double> dailyBalances;
+    double cumulativeBalance = 0.0;
+
+    // Получаем транзакции в хронологическом порядке
+    QSqlQuery query("SELECT date, type, amount FROM transactions ORDER BY date ASC");
+
+    while (query.next()) {
+        QDate date = QDate::fromString(query.value("date").toString(), "yyyy-MM-dd");
+        QString type = query.value("type").toString();
+        double amount = query.value("amount").toDouble();
+
+        // Обновляем накопительный баланс
+        if (type == "income") {
+            cumulativeBalance += amount;
+        } else {
+            cumulativeBalance -= amount;
+        }
+
+        // Сохраняем баланс на конец дня
+        dailyBalances[date] = cumulativeBalance;
+    }
+
+    return dailyBalances;
+}
+
+// Показывает диалог с графиком
+void MainWindow::showBalanceChart()
+{
+    QMap<QDate, double> balanceData = calculateDailyBalances();
+
+    if (balanceData.isEmpty()) {
+        QMessageBox::information(this, "Информация", "Нет данных для построения графика");
+        return;
+    }
+
+    BalanceChartDialog* dialog = new BalanceChartDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setBalanceData(balanceData);
+    dialog->exec();
+}
+
